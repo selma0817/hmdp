@@ -41,24 +41,22 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     private StringRedisTemplate stringRedisTemplate;
     @Override
     public Result sendCode(String phone, HttpSession session) {
-        // authenticate phone number
+        // 1. authenticate phone number
         if (RegexUtils.isPhoneInvalid(phone)){
+            // if not match, return wrong phone number
             return Result.fail("Wrong Phone Number");
         }
-        // if not match, return wrong phone number
+        // 2. if match, create code
         String code = RandomUtil.randomNumbers(6);
-        // if match, create code
 
-        // store the code in session
-        //session.setAttribute("code", code);
 
-        // store the code in redis
+        // 3. store the code in redis
         stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
 
-        // send code to user
+        // 4. send code to user
         log.debug("successfully send code:{}", code);
         // send ok
-        return Result.ok();
+        return Result.ok(code);
     }
     @Override
     public Result login(LoginFormDTO loginForm, HttpSession session){
