@@ -3,6 +3,9 @@
 local voucherId = ARGV[1]
 -- 1.2 user id
 local userId = ARGV[2]
+-- 1.3 order id
+local orderId = ARGV[3]
+
 -- 2. data key
 -- 2.1. stock key
 local stockKey = 'seckill:stock:' .. voucherId
@@ -24,4 +27,8 @@ end
 redis.call('incrby', stockKey, -1)
 -- 3.4 put to order key
 redis.call('sadd', orderKey, userId)
+
+--3.6 send message to message queue, XADD stream.orders * k1 v1 k2 v2
+redis.call('xadd','stream.orders','*','userId',userId, 'voucherId',voucherId, 'id', orderId)
+
 return 0
