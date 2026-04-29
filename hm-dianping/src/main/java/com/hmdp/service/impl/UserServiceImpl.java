@@ -11,15 +11,21 @@ import com.hmdp.dto.UserDTO;
 import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
+import com.hmdp.utils.RedisConstants;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -111,6 +117,55 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //session.setAttribute("user", user);
 
         return Result.ok(token);
+    }
+
+    @Override
+    public Result sign() {
+        // key is username+year+month
+        // 1. get current loggedin user
+        Long userId = UserHolder.getUser().getId();
+        // 2. get date
+        LocalDateTime now = LocalDateTime.now();
+        // 3. get key
+        String keySuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        String key = USER_SIGN_KEY + userId + keySuffix;
+        // 4. get today's date
+        int dayOfMonth = now.getDayOfMonth();
+        stringRedisTemplate.opsForValue().setBit(key, dayOfMonth-1, true);
+        // 5. write into redis SETBIT key offset 1
+
+        return Result.ok();
+    }
+
+    @Override
+    public Result signCount() {
+        // get this month until today's all signing record
+        Long userId = UserHolder.getUser().getId();
+        LocalDateTime now = LocalDateTime.now();
+        String keySuffix  = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        String key = USER_SIGN_KEY + userId + keySuffix;
+        int dayOfMonth = now.getDayOfMonth();
+        List<Long> result = stringRedisTemplate.opsForValue()
+                .bitField(key, BitFieldSubCommands.create()
+                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0)
+        );
+        if(result==null || result.isEmpty()){
+            return Result.ok();
+        }
+        Long num = result.get(0);
+        if (num==null || num==0){
+            return Result.ok();
+        }
+        String binaryString = Long.toBinaryString(num);
+        int count =0;
+        for(int i=binaryString.length()-1; i>=0; i--){
+            if(binaryString.charAt(i)=='1'){
+                count++;
+            }else{
+                break;
+            }
+        }
+        return Result.ok(count);
     }
 
     private User createUserWithPhone(String phone) {
